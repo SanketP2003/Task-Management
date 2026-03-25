@@ -1,2 +1,8 @@
-# Central place to import all SQLAlchemy models for metadata discovery.
-# Keep empty for now until models are introduced in later commits.
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+	pass
+
+
+from app.models.task import Task  # noqa: F401,E402
