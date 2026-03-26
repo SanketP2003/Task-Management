@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
@@ -105,8 +105,12 @@ async def update_task(task_id: int, task_in: TaskUpdate, db: Session = Depends(g
     return updated
 
 
-@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_task(task_id: int, db: Session = Depends(get_db)) -> None:
+@router.delete(
+    "/{task_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_task(task_id: int, db: Session = Depends(get_db)) -> Response:
     try:
         deleted = task_crud.delete_task(db, task_id)
     except ValueError:
@@ -117,3 +121,5 @@ async def delete_task(task_id: int, db: Session = Depends(get_db)) -> None:
 
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
