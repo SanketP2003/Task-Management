@@ -164,6 +164,10 @@ class TaskFormNotifier extends FamilyNotifier<TaskFormState, String> {
   }
 
   Future<bool> submit() async {
+    if (state.isLoading || ref.read(taskMutationLoadingProvider)) {
+      return false;
+    }
+
     final validationMessage = _validate();
     if (validationMessage != null) {
       state = state.copyWith(
@@ -173,16 +177,16 @@ class TaskFormNotifier extends FamilyNotifier<TaskFormState, String> {
       return false;
     }
 
-    final repository = ref.read(taskRepositoryProvider);
-
     state = state.copyWith(
       submissionStatus: TaskFormSubmissionStatus.loading,
       clearErrorMessage: true,
     );
 
     try {
+      final taskNotifier = ref.read(taskProvider.notifier);
+
       if (state.isEditMode) {
-        await repository.updateTask(
+        await taskNotifier.updateTask(
           id: state.editingTaskId!,
           title: state.title.trim(),
           description: state.description.trim(),
@@ -192,7 +196,7 @@ class TaskFormNotifier extends FamilyNotifier<TaskFormState, String> {
           setBlockedBy: true,
         );
       } else {
-        await repository.createTask(
+        await taskNotifier.createTask(
           title: state.title.trim(),
           description: state.description.trim(),
           dueDate: state.dueDate!,
@@ -202,6 +206,7 @@ class TaskFormNotifier extends FamilyNotifier<TaskFormState, String> {
       }
 
       ref.invalidate(taskProvider);
+      ref.invalidate(allTasksProvider);
 
       state = state.copyWith(
         submissionStatus: TaskFormSubmissionStatus.success,
@@ -272,12 +277,18 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     super.initState();
 
     final notifier = ref.read(taskFormProvider(_draftKey).notifier);
-    notifier.initialize(widget.task);
-
     final formState = ref.read(taskFormProvider(_draftKey));
 
-    _titleController = TextEditingController(text: formState.title);
-    _descriptionController = TextEditingController(text: formState.description);
+    if (!formState.initialized) {
+      Future.microtask(() => notifier.initialize(widget.task));
+      _titleController = TextEditingController(text: widget.task?.title ?? '');
+      _descriptionController =
+          TextEditingController(text: widget.task?.description ?? '');
+    } else {
+      _titleController = TextEditingController(text: formState.title);
+      _descriptionController =
+          TextEditingController(text: formState.description);
+    }
   }
 
   @override
@@ -309,6 +320,12 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
 
+    final formState = ref.read(taskFormProvider(_draftKey));
+    final isMutating = ref.read(taskMutationLoadingProvider);
+    if (formState.isLoading || isMutating) {
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -320,7 +337,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       return;
     }
 
-    final formState = ref.read(taskFormProvider(_draftKey));
+    final latestFormState = ref.read(taskFormProvider(_draftKey));
 
     if (success) {
       final actionText = _isEditMode ? 'Task updated' : 'Task created';
@@ -331,9 +348,9 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       return;
     }
 
-    if (formState.errorMessage != null) {
+    if (latestFormState.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(formState.errorMessage!)),
+        SnackBar(content: Text(latestFormState.errorMessage!)),
       );
     }
   }
@@ -341,7 +358,9 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
   @override
   Widget build(BuildContext context) {
     final formState = ref.watch(taskFormProvider(_draftKey));
-    final tasksAsync = ref.watch(taskProvider);
+    final isMutating = ref.watch(taskMutationLoadingProvider);
+    final isLoading = formState.isLoading || isMutating;
+    final tasksAsync = ref.watch(allTasksProvider);
     final allTasks = tasksAsync.valueOrNull ?? <TaskEntity>[];
 
     final candidateTasks = allTasks
@@ -362,7 +381,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
       ),
       body: SafeArea(
         child: AbsorbPointer(
-          absorbing: formState.isLoading,
+          absorbing: isLoading,
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Form(
@@ -372,7 +391,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                 children: [
                   TextFormField(
                     controller: _titleController,
-                    enabled: !formState.isLoading,
+                    enabled: !isLoading,
                     decoration: const InputDecoration(
                       labelText: 'Title',
                       hintText: 'Enter a task title',
@@ -391,7 +410,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _descriptionController,
-                    enabled: !formState.isLoading,
+                    enabled: !isLoading,
                     decoration: const InputDecoration(
                       labelText: 'Description',
                       hintText: 'Add details for this task',
@@ -418,9 +437,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                           : _dateFormatter.format(formState.dueDate!);
 
                       return InkWell(
-                        onTap: formState.isLoading
-                            ? null
-                            : () => _pickDueDate(formState),
+                        onTap: isLoading ? null : () => _pickDueDate(formState),
                         borderRadius: BorderRadius.circular(8),
                         child: InputDecorator(
                           decoration: InputDecoration(
@@ -455,7 +472,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                         child: Text('Done'),
                       ),
                     ],
-                    onChanged: formState.isLoading
+                    onChanged: isLoading
                         ? null
                         : (value) {
                             if (value != null) {
@@ -489,7 +506,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                           child: Text('Task #$selectedBlockedBy (unavailable)'),
                         ),
                     ],
-                    onChanged: formState.isLoading
+                    onChanged: isLoading
                         ? null
                         : (value) {
                             ref
@@ -507,8 +524,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: formState.isLoading ||
-                              formState.blockedBy == null
+                      onPressed: isLoading || formState.blockedBy == null
                           ? null
                           : () {
                               ref
@@ -533,8 +549,8 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                   SizedBox(
                     height: 48,
                     child: FilledButton(
-                      onPressed: formState.isLoading ? null : _submit,
-                      child: formState.isLoading
+                      onPressed: isLoading ? null : _submit,
+                      child: isLoading
                           ? const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [

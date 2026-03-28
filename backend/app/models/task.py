@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 
 from sqlalchemy import DateTime, Enum as SQLAlchemyEnum, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -27,7 +28,7 @@ class Task(Base):
         default=TaskStatus.TODO,
         nullable=False,
     )
-    blocked_by: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), nullable=True)
+    blocked_by: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -40,7 +41,7 @@ class Task(Base):
         nullable=False,
     )
 
-    blocked_by_task: Mapped[Task | None] = relationship(
+    blocked_by_task: Mapped[Optional['Task']] = relationship(
         "Task",
         remote_side="Task.id",
         back_populates="dependent_tasks",

@@ -7,9 +7,9 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Task Manager'),
+        title: const Text('Task Manager'),
       ),
-      body: SizedBox.shrink(),
+      body: const SizedBox.shrink(),
     );
   }
 }

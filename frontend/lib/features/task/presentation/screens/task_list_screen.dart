@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/task_entity.dart';
 import '../providers/task_provider.dart';
 import '../widgets/task_card.dart';
+import 'task_form_screen.dart';
 
 class TaskListScreen extends ConsumerStatefulWidget {
   const TaskListScreen({super.key});
@@ -159,10 +160,57 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                   }
 
                   return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(
+                        16, 8, 16, 88), // Extra padding for FAB
                     itemBuilder: (context, index) {
                       final task = tasks[index];
-                      return TaskCard(task: task);
+                      return Dismissible(
+                        key: ValueKey(task.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.error,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.delete_outline,
+                            color: Theme.of(context).colorScheme.onError,
+                          ),
+                        ),
+                        onDismissed: (_) {
+                          ref
+                              .read(taskProvider.notifier)
+                              .deleteTask(task.id)
+                              .then((_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Task deleted')),
+                              );
+                            }
+                          }).catchError((error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Failed to delete task: \${error.toString()}')),
+                              );
+                              ref
+                                  .read(taskProvider.notifier)
+                                  .refresh(); // restore UI
+                            }
+                          });
+                        },
+                        child: TaskCard(
+                          task: task,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => TaskFormScreen(task: task),
+                            ),
+                          ),
+                        ),
+                      );
                     },
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemCount: tasks.length,
@@ -172,6 +220,13 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Add Task',
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const TaskFormScreen()),
+        ),
+        child: const Icon(Icons.add),
       ),
     );
   }

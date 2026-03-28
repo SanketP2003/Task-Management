@@ -30,8 +30,29 @@ final taskStatusFilterProvider = StateProvider<TaskStatus?>((ref) {
   return null;
 });
 
+final taskMutationLoadingProvider = StateProvider<bool>((ref) {
+  return false;
+});
+
 final taskProvider =
     AsyncNotifierProvider<TaskNotifier, List<TaskEntity>>(TaskNotifier.new);
+
+final allTasksProvider =
+    AsyncNotifierProvider<AllTasksNotifier, List<TaskEntity>>(
+        AllTasksNotifier.new);
+
+class AllTasksNotifier extends AsyncNotifier<List<TaskEntity>> {
+  @override
+  Future<List<TaskEntity>> build() async {
+    return ref.read(taskRepositoryProvider).fetchTasks();
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+        () => ref.read(taskRepositoryProvider).fetchTasks());
+  }
+}
 
 class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
   late final TaskRepository _repository;
@@ -69,10 +90,16 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
     TaskStatus status = TaskStatus.todo,
     int? blockedBy,
   }) async {
+    if (ref.read(taskMutationLoadingProvider)) {
+      return;
+    }
+
+    ref.read(taskMutationLoadingProvider.notifier).state = true;
+
     final previous = state.valueOrNull ?? <TaskEntity>[];
     state = const AsyncValue.loading();
 
-    state = await AsyncValue.guard(() async {
+    try {
       final created = await _repository.createTask(
         title: title,
         description: description,
@@ -80,8 +107,14 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
         status: status,
         blockedBy: blockedBy,
       );
-      return [created, ...previous];
-    });
+
+      state = AsyncValue.data([created, ...previous]);
+    } catch (error, stackTrace) {
+      state = AsyncValue.error(error, stackTrace);
+      rethrow;
+    } finally {
+      ref.read(taskMutationLoadingProvider.notifier).state = false;
+    }
   }
 
   Future<void> updateTask({
@@ -93,10 +126,16 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
     int? blockedBy,
     bool setBlockedBy = false,
   }) async {
+    if (ref.read(taskMutationLoadingProvider)) {
+      return;
+    }
+
+    ref.read(taskMutationLoadingProvider.notifier).state = true;
+
     final previous = state.valueOrNull ?? <TaskEntity>[];
     state = const AsyncValue.loading();
 
-    state = await AsyncValue.guard(() async {
+    try {
       final updated = await _repository.updateTask(
         id: id,
         title: title,
@@ -107,10 +146,17 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
         setBlockedBy: setBlockedBy,
       );
 
-      return previous
-          .map((task) => task.id == id ? updated : task)
-          .toList(growable: false);
-    });
+      state = AsyncValue.data(
+        previous
+            .map((task) => task.id == id ? updated : task)
+            .toList(growable: false),
+      );
+    } catch (error, stackTrace) {
+      state = AsyncValue.error(error, stackTrace);
+      rethrow;
+    } finally {
+      ref.read(taskMutationLoadingProvider.notifier).state = false;
+    }
   }
 
   Future<void> deleteTask(int id) async {
@@ -119,6 +165,7 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
 
     state = await AsyncValue.guard(() async {
       await _repository.deleteTask(id);
+      ref.invalidate(allTasksProvider);
       return previous.where((task) => task.id != id).toList(growable: false);
     });
   }
