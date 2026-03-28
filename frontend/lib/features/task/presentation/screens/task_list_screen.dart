@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/entities/task_entity.dart';
 import '../providers/task_provider.dart';
 import '../widgets/task_card.dart';
 
@@ -12,64 +15,201 @@ class TaskListScreen extends ConsumerStatefulWidget {
 }
 
 class _TaskListScreenState extends ConsumerState<TaskListScreen> {
+  late final TextEditingController _searchController;
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(
+      text: ref.read(taskSearchQueryProvider),
+    );
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    ref.read(taskSearchQueryProvider.notifier).state = value;
+
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      ref.read(taskProvider.notifier).refresh();
+    });
+  }
+
+  void _onStatusChanged(TaskStatus? value) {
+    ref.read(taskStatusFilterProvider.notifier).state = value;
+    ref.read(taskProvider.notifier).refresh();
+  }
+
+  String _statusLabel(TaskStatus? status) {
+    switch (status) {
+      case null:
+        return 'All';
+      case TaskStatus.todo:
+        return 'To-Do';
+      case TaskStatus.inProgress:
+        return 'In Progress';
+      case TaskStatus.done:
+        return 'Done';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tasksAsync = ref.watch(taskProvider);
+    final selectedStatus = ref.watch(taskStatusFilterProvider);
+    final searchQuery = ref.watch(taskSearchQueryProvider);
+    final hasFilters = selectedStatus != null || searchQuery.trim().isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Task Manager'),
       ),
-      body: RefreshIndicator(
-        onRefresh: () => ref.read(taskProvider.notifier).refresh(),
-        child: tasksAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, __) => _ErrorState(
-            message: error.toString(),
-            onRetry: () => ref.read(taskProvider.notifier).refresh(),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search tasks...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: searchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                _onSearchChanged('');
+                              },
+                              icon: const Icon(Icons.close),
+                              tooltip: 'Clear search',
+                            ),
+                    ),
+                    onChanged: _onSearchChanged,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<TaskStatus?>(
+                      value: selectedStatus,
+                      borderRadius: BorderRadius.circular(12),
+                      onChanged: _onStatusChanged,
+                      items: const [
+                        DropdownMenuItem<TaskStatus?>(
+                          value: null,
+                          child: Text('All'),
+                        ),
+                        DropdownMenuItem<TaskStatus?>(
+                          value: TaskStatus.todo,
+                          child: Text('To-Do'),
+                        ),
+                        DropdownMenuItem<TaskStatus?>(
+                          value: TaskStatus.inProgress,
+                          child: Text('In Progress'),
+                        ),
+                        DropdownMenuItem<TaskStatus?>(
+                          value: TaskStatus.done,
+                          child: Text('Done'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          data: (tasks) {
-            if (tasks.isEmpty) {
-              return const _EmptyState();
-            }
+          if (hasFilters)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Showing: ${_statusLabel(selectedStatus)} ${searchQuery.trim().isEmpty ? '' : '• "$searchQuery"'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => ref.read(taskProvider.notifier).refresh(),
+              child: tasksAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, __) => _ErrorState(
+                  message: error.toString(),
+                  onRetry: () => ref.read(taskProvider.notifier).refresh(),
+                ),
+                data: (tasks) {
+                  if (tasks.isEmpty) {
+                    return _EmptyState(hasFilters: hasFilters);
+                  }
 
-            return ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemBuilder: (context, index) {
-                final task = tasks[index];
-                return TaskCard(task: task);
-              },
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemCount: tasks.length,
-            );
-          },
-        ),
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    itemBuilder: (context, index) {
+                      final task = tasks[index];
+                      return TaskCard(task: task);
+                    },
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemCount: tasks.length,
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({
+    this.hasFilters = false,
+  });
+
+  final bool hasFilters;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 48,
-            color: Theme.of(context).colorScheme.primary,
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.55,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  hasFilters ? 'No matching tasks found' : 'No tasks yet',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            'No tasks yet',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -106,7 +246,9 @@ class _ErrorState extends StatelessWidget {
               message,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.8),
+                    color: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
                   ),
             ),
             const SizedBox(height: 16),

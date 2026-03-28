@@ -22,21 +22,43 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
   return TaskRepositoryImpl(remoteDataSource);
 });
 
-final taskProvider = AsyncNotifierProvider<TaskNotifier, List<TaskEntity>>(TaskNotifier.new);
+final taskSearchQueryProvider = StateProvider<String>((ref) {
+  return '';
+});
+
+final taskStatusFilterProvider = StateProvider<TaskStatus?>((ref) {
+  return null;
+});
+
+final taskProvider =
+    AsyncNotifierProvider<TaskNotifier, List<TaskEntity>>(TaskNotifier.new);
 
 class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
   late final TaskRepository _repository;
 
+  String get _searchQuery {
+    final value = ref.read(taskSearchQueryProvider).trim();
+    return value;
+  }
+
+  TaskStatus? get _selectedStatus => ref.read(taskStatusFilterProvider);
+
   @override
   Future<List<TaskEntity>> build() async {
     _repository = ref.read(taskRepositoryProvider);
-    return _repository.fetchTasks();
+    return _repository.fetchTasks(
+      status: _selectedStatus,
+      search: _searchQuery.isEmpty ? null : _searchQuery,
+    );
   }
 
-  Future<void> refresh({TaskStatus? status, String? search}) async {
+  Future<void> refresh() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-      () => _repository.fetchTasks(status: status, search: search),
+      () => _repository.fetchTasks(
+        status: _selectedStatus,
+        search: _searchQuery.isEmpty ? null : _searchQuery,
+      ),
     );
   }
 
