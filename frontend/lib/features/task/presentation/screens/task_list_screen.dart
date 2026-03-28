@@ -207,6 +207,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                           },
                           child: TaskCard(
                             task: task,
+                            searchQuery: searchQuery,
                             onTap: () => Navigator.of(context).push(
                               PageRouteBuilder(
                                 pageBuilder:

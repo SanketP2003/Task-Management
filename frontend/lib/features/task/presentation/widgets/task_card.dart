@@ -9,10 +9,12 @@ class TaskCard extends ConsumerWidget {
   const TaskCard({
     super.key,
     required this.task,
+    this.searchQuery = '',
     this.onTap,
   });
 
   final TaskEntity task;
+  final String searchQuery;
   final VoidCallback? onTap;
 
   bool _isBlocked(WidgetRef ref) {
@@ -29,6 +31,51 @@ class TaskCard extends ConsumerWidget {
 
     // Fallback if not found (maybe assume not blocked or still blocked depending on UX)
     return task.status != TaskStatus.done; // Just keep old logic as fallback
+  }
+
+  Widget _buildHighlightedText(
+      String text, String query, BuildContext context) {
+    if (query.trim().isEmpty) {
+      return Text(
+        text,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+      );
+    }
+
+    final matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
+    if (matchIndex == -1) {
+      return Text(
+        text,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+      );
+    }
+
+    final beforeMatch = text.substring(0, matchIndex);
+    final match = text.substring(matchIndex, matchIndex + query.length);
+    final afterMatch = text.substring(matchIndex + query.length);
+
+    return RichText(
+      text: TextSpan(
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+        children: [
+          TextSpan(text: beforeMatch),
+          TextSpan(
+            text: match,
+            style: const TextStyle(
+              backgroundColor: Colors.yellow,
+              color: Colors.black,
+            ),
+          ),
+          TextSpan(text: afterMatch),
+        ],
+      ),
+    );
   }
 
   @override
@@ -67,12 +114,8 @@ class TaskCard extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              task.title,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            _buildHighlightedText(
+                                task.title, searchQuery, context),
                             const SizedBox(height: 6),
                             Text(
                               task.description,
