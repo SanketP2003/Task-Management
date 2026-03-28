@@ -208,8 +208,21 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                           child: TaskCard(
                             task: task,
                             onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => TaskFormScreen(task: task),
+                              PageRouteBuilder(
+                                pageBuilder:
+                                    (context, animation, secondaryAnimation) =>
+                                        TaskFormScreen(task: task),
+                                transitionsBuilder: (context, animation,
+                                    secondaryAnimation, child) {
+                                  const begin = Offset(1.0, 0.0);
+                                  const end = Offset.zero;
+                                  const curve = Curves.easeInOut;
+                                  final tween = Tween(begin: begin, end: end)
+                                      .chain(CurveTween(curve: curve));
+                                  return SlideTransition(
+                                      position: animation.drive(tween),
+                                      child: child);
+                                },
                               ),
                             ),
                           ),
@@ -228,7 +241,20 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         tooltip: 'Add Task',
         onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TaskFormScreen()),
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const TaskFormScreen(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              const begin = Offset(0.0, 1.0);
+              const end = Offset.zero;
+              const curve = Curves.easeOutQuart;
+              final tween =
+                  Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              final slideAnimation = animation.drive(tween);
+              return SlideTransition(position: slideAnimation, child: child);
+            },
+          ),
         ),
         icon: const Icon(Icons.add),
         label: const Text('New Task'),
