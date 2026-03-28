@@ -135,6 +135,12 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditMode ? 'Edit Task' : 'Create Task'),
+        bottom: isLoading
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(4.0),
+                child: LinearProgressIndicator(),
+              )
+            : null,
       ),
       body: SafeArea(
         child: AbsorbPointer(

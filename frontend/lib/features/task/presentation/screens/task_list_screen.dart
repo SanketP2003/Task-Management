@@ -149,7 +149,8 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
             child: RefreshIndicator(
               onRefresh: () => ref.read(taskProvider.notifier).refresh(),
               child: tasksAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () =>
+                    const Center(child: CircularProgressIndicator.adaptive()),
                 error: (error, __) => _ErrorState(
                   message: error.toString(),
                   onRetry: () => ref.read(taskProvider.notifier).refresh(),
@@ -159,61 +160,64 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                     return _EmptyState(hasFilters: hasFilters);
                   }
 
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(
-                        16, 8, 16, 88), // Extra padding for FAB
-                    itemBuilder: (context, index) {
-                      final task = tasks[index];
-                      return Dismissible(
-                        key: ValueKey(task.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.error,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.delete_outline,
-                            color: Theme.of(context).colorScheme.onError,
-                          ),
-                        ),
-                        onDismissed: (_) {
-                          ref
-                              .read(taskProvider.notifier)
-                              .deleteTask(task.id)
-                              .then((_) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Task deleted')),
-                              );
-                            }
-                          }).catchError((error) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Failed to delete task: \${error.toString()}')),
-                              );
-                              ref
-                                  .read(taskProvider.notifier)
-                                  .refresh(); // restore UI
-                            }
-                          });
-                        },
-                        child: TaskCard(
-                          task: task,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => TaskFormScreen(task: task),
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: ListView.separated(
+                      key: ValueKey(tasks.length),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+                      itemBuilder: (context, index) {
+                        final task = tasks[index];
+                        return Dismissible(
+                          key: ValueKey(task.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 16),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.error,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.delete_outline,
+                              color: Theme.of(context).colorScheme.onError,
                             ),
                           ),
-                        ),
-                      );
-                    },
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemCount: tasks.length,
+                          onDismissed: (_) {
+                            ref
+                                .read(taskProvider.notifier)
+                                .deleteTask(task.id)
+                                .then((_) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Task deleted')),
+                                );
+                              }
+                            }).catchError((error) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'Failed to delete task: \${error.toString()}')),
+                                );
+                                ref
+                                    .read(taskProvider.notifier)
+                                    .refresh(); // restore UI
+                              }
+                            });
+                          },
+                          child: TaskCard(
+                            task: task,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => TaskFormScreen(task: task),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemCount: tasks.length,
+                    ),
                   );
                 },
               ),
@@ -221,12 +225,14 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         tooltip: 'Add Task',
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const TaskFormScreen()),
         ),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('New Task'),
+        elevation: 4,
       ),
     );
   }
@@ -251,15 +257,33 @@ class _EmptyState extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.inbox_outlined,
-                  size: 48,
-                  color: Theme.of(context).colorScheme.primary,
+                  hasFilters ? Icons.search_off_rounded : Icons.inbox_outlined,
+                  size: 64,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.5),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 Text(
-                  hasFilters ? 'No matching tasks found' : 'No tasks yet',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  hasFilters ? 'No matching tasks found.' : 'No tasks yet.',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
+                if (!hasFilters) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tap the button below to add a new task.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withValues(alpha: 0.7),
+                        ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -288,28 +312,33 @@ class _ErrorState extends StatelessWidget {
           children: [
             Icon(
               Icons.error_outline,
-              size: 48,
+              size: 64,
               color: Theme.of(context).colorScheme.error,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(
-              'Something went wrong',
-              style: Theme.of(context).textTheme.titleMedium,
+              'Oops! Something went wrong',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withValues(alpha: 0.8),
                   ),
             ),
-            const SizedBox(height: 16),
-            FilledButton(
+            const SizedBox(height: 24),
+            FilledButton.icon(
               onPressed: onRetry,
-              child: const Text('Retry'),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try Again'),
             ),
           ],
         ),

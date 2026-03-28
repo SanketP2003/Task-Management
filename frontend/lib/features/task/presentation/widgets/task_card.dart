@@ -45,9 +45,9 @@ class TaskCard extends ConsumerWidget {
       child: Opacity(
         opacity: isBlocked ? 0.5 : 1,
         child: Card(
-          elevation: 3,
+          elevation: 4,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
           clipBehavior: Clip.antiAlias,
           color: isBlocked
@@ -140,22 +140,22 @@ class TaskCard extends ConsumerWidget {
       TaskStatus status, ColorScheme colorScheme, ThemeData theme) {
     switch (status) {
       case TaskStatus.todo:
-        return _StatusStyle(
+        return const _StatusStyle(
           label: 'To-Do',
-          background: colorScheme.secondaryContainer,
-          foreground: colorScheme.onSecondaryContainer,
+          background: Color(0xFFE0E0E0),
+          foreground: Color(0xFF424242),
         );
       case TaskStatus.inProgress:
-        return _StatusStyle(
+        return const _StatusStyle(
           label: 'In Progress',
-          background: colorScheme.tertiaryContainer,
-          foreground: colorScheme.onTertiaryContainer,
+          background: Color(0xFFFFF3E0),
+          foreground: Color(0xFFE65100),
         );
       case TaskStatus.done:
-        return _StatusStyle(
+        return const _StatusStyle(
           label: 'Done',
-          background: colorScheme.primaryContainer,
-          foreground: colorScheme.onPrimaryContainer,
+          background: Color(0xFFE8F5E9),
+          foreground: Color(0xFF2E7D32),
         );
     }
   }
