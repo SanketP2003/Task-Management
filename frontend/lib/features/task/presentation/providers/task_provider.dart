@@ -48,9 +48,22 @@ class AllTasksNotifier extends AsyncNotifier<List<TaskEntity>> {
   }
 
   Future<void> refresh() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
-        () => ref.read(taskRepositoryProvider).fetchTasks());
+    if (state.hasValue) {
+      state = AsyncValue<List<TaskEntity>>.loading().copyWithPrevious(state);
+    } else {
+      state = const AsyncValue.loading();
+    }
+
+    try {
+      final data = await ref.read(taskRepositoryProvider).fetchTasks();
+      state = AsyncValue.data(data);
+    } catch (e, st) {
+      if (state.hasValue) {
+        state = AsyncValue<List<TaskEntity>>.error(e, st).copyWithPrevious(state);
+      } else {
+        state = AsyncValue.error(e, st);
+      }
+    }
   }
 }
 
@@ -74,14 +87,25 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
   }
 
   Future<void> refresh() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
-      () => _repository.fetchTasks(
+    // Preserve current data while loading so the UI doesn't flicker
+    if (state.hasValue) {
+      state = AsyncValue<List<TaskEntity>>.loading().copyWithPrevious(state);
+    } else {
+      state = const AsyncValue.loading();
+    }
+    
+    try {
+      final data = await _repository.fetchTasks(
         status: _selectedStatus,
         search: _searchQuery.isEmpty ? null : _searchQuery,
-      ),
-    );
-  }
+      );
+      state = AsyncValue.data(data);
+    } catch (e, st) {
+      if (state.hasValue) {
+        state = AsyncValue<List<TaskEntity>>.error(e, st).copyWithPrevious(state);
+      } else {
+        state = AsyncValue.error(e, st);
+      }
 
   Future<void> createTask({
     required String title,
@@ -97,7 +121,6 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
     ref.read(taskMutationLoadingProvider.notifier).state = true;
 
     final previous = state.valueOrNull ?? <TaskEntity>[];
-    state = const AsyncValue.loading();
 
     try {
       final created = await _repository.createTask(
@@ -110,7 +133,8 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
 
       state = AsyncValue.data([created, ...previous]);
     } catch (error, stackTrace) {
-      state = AsyncValue.error(error, stackTrace);
+      // Revert to previous data on error to prevent erasing the list
+      state = AsyncValue.data(previous);
       rethrow;
     } finally {
       ref.read(taskMutationLoadingProvider.notifier).state = false;
@@ -133,7 +157,6 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
     ref.read(taskMutationLoadingProvider.notifier).state = true;
 
     final previous = state.valueOrNull ?? <TaskEntity>[];
-    state = const AsyncValue.loading();
 
     try {
       final updated = await _repository.updateTask(
@@ -152,7 +175,7 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
             .toList(growable: false),
       );
     } catch (error, stackTrace) {
-      state = AsyncValue.error(error, stackTrace);
+      state = AsyncValue.data(previous);
       rethrow;
     } finally {
       ref.read(taskMutationLoadingProvider.notifier).state = false;
@@ -161,13 +184,21 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
 
   Future<void> deleteTask(int id) async {
     final previous = state.valueOrNull ?? <TaskEntity>[];
-    state = const AsyncValue.loading();
+    // Optimistically remove from UI, or just show loading, but do not destroy the list
+    // state = const AsyncValue.loading(); it replaces the whole list with a spinner!
+    // Instead we can keep the data.
 
-    state = await AsyncValue.guard(() async {
+    try {
       await _repository.deleteTask(id);
       ref.invalidate(allTasksProvider);
-      return previous.where((task) => task.id != id).toList(growable: false);
-    });
+      state = AsyncValue.data(
+          previous.where((task) => task.id != id).toList(growable: false));
+    } catch (error, stackTrace) {
+      // Don't replace state with error, just retain previous list and rethrow
+      // so the UI can show a Snackbar
+      state = AsyncValue.data(previous);
+      rethrow;
+    }
   }
 }
 
@@ -399,6 +430,12 @@ class TaskFormNotifier extends FamilyNotifier<TaskFormState, String> {
   }
 
   String _readableError(Object error) {
+    if (error is ApiException) {
+      return error.message;
+    }
+    if (error is NetworkException) {
+      return error.message;
+    }
     final raw = error.toString();
     if (raw.startsWith('Exception: ')) {
       return raw.replaceFirst('Exception: ', '');

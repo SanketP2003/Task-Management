@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiException implements Exception {
@@ -14,7 +17,15 @@ class ApiException implements Exception {
   final dynamic body;
 
   @override
-  String toString() => 'ApiException(statusCode: $statusCode, message: $message)';
+  String toString() => message;
+}
+
+class NetworkException implements Exception {
+  final String message;
+  NetworkException(this.message);
+
+  @override
+  String toString() => message;
 }
 
 class ApiClient {
@@ -25,6 +36,25 @@ class ApiClient {
 
   final String baseUrl;
   final http.Client _client;
+  static const Duration _timeout = Duration(seconds: 15);
+
+  Future<dynamic> _safeApiCall(Future<http.Response> Function() call) async {
+    try {
+      final response = await call().timeout(_timeout);
+      return _parseResponse(response);
+    } on SocketException catch (e) {
+      debugPrint('Network Error: $e');
+      throw NetworkException(
+          'Network error: Please check your internet connection.');
+    } on TimeoutException catch (e) {
+      debugPrint('Timeout Error: $e');
+      throw NetworkException('Request timed out. Please try again.');
+    } catch (e) {
+      if (e is ApiException || e is NetworkException) rethrow;
+      debugPrint('Unexpected Error: $e');
+      throw NetworkException('Something went wrong. Please try again later.');
+    }
+  }
 
   Future<dynamic> get(
     String path, {
@@ -32,8 +62,7 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     final uri = _buildUri(path, queryParameters: queryParameters);
-    final response = await _client.get(uri, headers: _headers(headers));
-    return _parseResponse(response);
+    return _safeApiCall(() => _client.get(uri, headers: _headers(headers)));
   }
 
   Future<dynamic> post(
@@ -42,12 +71,11 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     final uri = _buildUri(path);
-    final response = await _client.post(
-      uri,
-      headers: _headers(headers),
-      body: body == null ? null : jsonEncode(body),
-    );
-    return _parseResponse(response);
+    return _safeApiCall(() => _client.post(
+          uri,
+          headers: _headers(headers),
+          body: body == null ? null : jsonEncode(body),
+        ));
   }
 
   Future<dynamic> put(
@@ -56,12 +84,11 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     final uri = _buildUri(path);
-    final response = await _client.put(
-      uri,
-      headers: _headers(headers),
-      body: body == null ? null : jsonEncode(body),
-    );
-    return _parseResponse(response);
+    return _safeApiCall(() => _client.put(
+          uri,
+          headers: _headers(headers),
+          body: body == null ? null : jsonEncode(body),
+        ));
   }
 
   Future<dynamic> delete(
@@ -69,8 +96,7 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     final uri = _buildUri(path);
-    final response = await _client.delete(uri, headers: _headers(headers));
-    return _parseResponse(response);
+    return _safeApiCall(() => _client.delete(uri, headers: _headers(headers)));
   }
 
   Uri _buildUri(String path, {Map<String, String>? queryParameters}) {
@@ -83,7 +109,8 @@ class ApiClient {
 
     return base.replace(
       pathSegments: mergedPath,
-      queryParameters: queryParameters?.isEmpty == true ? null : queryParameters,
+      queryParameters:
+          queryParameters?.isEmpty == true ? null : queryParameters,
     );
   }
 
@@ -103,9 +130,40 @@ class ApiClient {
       return parsedBody;
     }
 
-    final message = parsedBody is Map<String, dynamic>
-        ? (parsedBody['detail']?.toString() ?? 'Request failed')
-        : 'Request failed';
+    String message = 'Something went wrong';
+
+    if (parsedBody is Map<String, dynamic> && parsedBody['detail'] != null) {
+      message = parsedBody['detail'].toString();
+    } else {
+      switch (response.statusCode) {
+        case 400:
+          message = 'Bad request. Please check your data.';
+          break;
+        case 401:
+          message = 'Unauthorized access.';
+          break;
+        case 403:
+          message = 'Forbidden access.';
+          break;
+        case 404:
+          message = 'Resource not found.';
+          break;
+        case 500:
+          message = 'Internal server error. Please try again later.';
+          break;
+        case 502:
+          message = 'Bad gateway.';
+          break;
+        case 503:
+          message = 'Service unavailable.';
+          break;
+        default:
+          message =
+              'Failed to load data (Status code: ${response.statusCode}).';
+      }
+    }
+
+    debugPrint('ApiException: [${response.statusCode}] $message');
 
     throw ApiException(
       statusCode: response.statusCode,

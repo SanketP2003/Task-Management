@@ -63,6 +63,41 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(taskProvider, (previous, next) {
+      if (next.hasError && !next.isLoading && previous?.hasData == true) {
+        final rawError = next.error.toString();
+        String errorMessage = 'Something went wrong';
+
+        if (rawError.contains('Network error') ||
+            rawError.contains('SocketException') ||
+            rawError.contains('timed out')) {
+          errorMessage = 'Network error';
+        } else if (rawError.contains('Failed to load') ||
+            next.error is StateError) {
+          errorMessage = 'Failed to load tasks';
+        } else {
+          errorMessage = rawError.startsWith('Exception: ')
+              ? rawError.substring(11)
+              : rawError;
+        }
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              behavior: SnackBarBehavior.floating,
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () => ref.read(taskProvider.notifier).refresh(),
+              ),
+            ),
+          );
+        }
+      }
+    });
+
     final tasksAsync = ref.watch(taskProvider);
     final selectedStatus = ref.watch(taskStatusFilterProvider);
     final searchQuery = ref.watch(taskSearchQueryProvider);
@@ -149,12 +184,28 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
             child: RefreshIndicator(
               onRefresh: () => ref.read(taskProvider.notifier).refresh(),
               child: tasksAsync.when(
+                skipError: true,
                 loading: () =>
                     const Center(child: CircularProgressIndicator.adaptive()),
-                error: (error, __) => _ErrorState(
-                  message: error.toString(),
-                  onRetry: () => ref.read(taskProvider.notifier).refresh(),
-                ),
+                error: (error, __) {
+                  String errorMessage = error.toString();
+                  if (errorMessage.contains('Network') ||
+                      errorMessage.contains('Socket') ||
+                      errorMessage.contains('timed out')) {
+                    errorMessage =
+                        'Network error: Please check your connection.';
+                  } else if (errorMessage.startsWith('Exception: ')) {
+                    errorMessage = errorMessage.replaceFirst('Exception: ', '');
+                  }
+                  if (errorMessage.length > 100) {
+                    errorMessage = 'Failed to load tasks';
+                  }
+
+                  return _ErrorState(
+                    message: errorMessage,
+                    onRetry: () => ref.read(taskProvider.notifier).refresh(),
+                  );
+                },
                 data: (tasks) {
                   if (tasks.isEmpty) {
                     return _EmptyState(hasFilters: hasFilters);
@@ -194,10 +245,24 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                               }
                             }).catchError((error) {
                               if (context.mounted) {
+                                String msg = error.toString();
+                                if (msg.contains('Network') ||
+                                    msg.contains('Socket') ||
+                                    msg.contains('time')) {
+                                  msg = 'Network error';
+                                } else if (msg.startsWith('Exception: ')) {
+                                  msg = msg.substring(11);
+                                } else if (msg.length > 50) {
+                                  msg = 'Something went wrong';
+                                }
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Failed to delete task: \${error.toString()}')),
+                                  SnackBar(
+                                    content:
+                                        Text('Failed to delete task: $msg'),
+                                    backgroundColor:
+                                        Theme.of(context).colorScheme.error,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
                                 );
                                 ref
                                     .read(taskProvider.notifier)

@@ -106,8 +106,21 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     }
 
     if (latestFormState.errorMessage != null) {
+      String msg = latestFormState.errorMessage!;
+      if (msg.contains('Network') ||
+          msg.contains('Socket') ||
+          msg.contains('time')) {
+        msg = 'Network error';
+      } else if (msg.length > 80 && !msg.contains(' ')) {
+        msg = 'Something went wrong';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(latestFormState.errorMessage!)),
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
