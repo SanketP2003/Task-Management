@@ -59,7 +59,8 @@ class AllTasksNotifier extends AsyncNotifier<List<TaskEntity>> {
       state = AsyncValue.data(data);
     } catch (e, st) {
       if (state.hasValue) {
-        state = AsyncValue<List<TaskEntity>>.error(e, st).copyWithPrevious(state);
+        state =
+            AsyncValue<List<TaskEntity>>.error(e, st).copyWithPrevious(state);
       } else {
         state = AsyncValue.error(e, st);
       }
@@ -93,7 +94,7 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
     } else {
       state = const AsyncValue.loading();
     }
-    
+
     try {
       final data = await _repository.fetchTasks(
         status: _selectedStatus,
@@ -102,10 +103,13 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
       state = AsyncValue.data(data);
     } catch (e, st) {
       if (state.hasValue) {
-        state = AsyncValue<List<TaskEntity>>.error(e, st).copyWithPrevious(state);
+        state =
+            AsyncValue<List<TaskEntity>>.error(e, st).copyWithPrevious(state);
       } else {
         state = AsyncValue.error(e, st);
       }
+    }
+  }
 
   Future<void> createTask({
     required String title,

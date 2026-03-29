@@ -24,6 +24,8 @@ void main() {
     description: 'Test Description',
     status: TaskStatus.todo,
     dueDate: DateTime(2026, 1, 1),
+    createdAt: DateTime(2026, 1, 1),
+    updatedAt: DateTime(2026, 1, 1),
     blockedBy: null,
   );
 
@@ -33,6 +35,8 @@ void main() {
     'description': 'Test Description',
     'status': 'todo',
     'due_date': '2026-01-01T00:00:00.000',
+    'created_at': '2026-01-01T00:00:00.000',
+    'updated_at': '2026-01-01T00:00:00.000',
     'blocked_by': null,
   };
 

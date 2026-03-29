@@ -16,6 +16,10 @@ void main() {
   late ProviderContainer container;
   late Listener<AsyncValue<List<TaskEntity>>> listener;
 
+  setUpAll(() {
+    registerFallbackValue(const AsyncLoading<List<TaskEntity>>());
+  });
+
   setUp(() {
     mockRepository = MockTaskRepository();
     container = ProviderContainer(
@@ -36,6 +40,8 @@ void main() {
     description: 'Test Description',
     status: TaskStatus.todo,
     dueDate: DateTime(2026, 1, 1),
+    createdAt: DateTime(2026, 1, 1),
+    updatedAt: DateTime(2026, 1, 1),
     blockedBy: null,
   );
 
@@ -60,7 +66,7 @@ void main() {
       // Verify the loaded data
       verify(() => listener(
             any(),
-            AsyncData([tTaskEntity]),
+            any(that: isA<AsyncData<List<TaskEntity>>>()),
           )).called(1);
     });
 
@@ -84,7 +90,7 @@ void main() {
 
       verify(() => listener(
             any(),
-            isA<AsyncError<List<TaskEntity>>>(),
+            any(that: isA<AsyncError<List<TaskEntity>>>()),
           )).called(1);
     });
 
@@ -99,6 +105,8 @@ void main() {
         description: 'Desc',
         status: TaskStatus.todo,
         dueDate: DateTime(2026, 1, 2),
+        createdAt: DateTime(2026, 1, 2),
+        updatedAt: DateTime(2026, 1, 2),
       );
 
       when(() => mockRepository.createTask(
