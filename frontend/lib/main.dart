@@ -20,11 +20,13 @@ class TaskManagerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
+    final authSession = authState.valueOrNull;
     final selectedThemeMode =
         ref.watch(themeProvider).valueOrNull ?? ThemeMode.light;
     ref.watch(notificationSettingsProvider);
 
     return MaterialApp(
+      key: ValueKey(authSession?.email ?? 'guest'),
       title: 'Task Manager App',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

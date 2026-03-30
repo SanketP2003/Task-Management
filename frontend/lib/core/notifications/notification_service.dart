@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -11,6 +12,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  bool _available = true;
 
   static const int _taskReminderIdOffset = 100000;
 
@@ -26,22 +28,37 @@ class NotificationService {
   static const NotificationDetails _notificationDetails =
       NotificationDetails(android: _androidDetails);
 
-  Future<void> initialize() async {
+  Future<bool> initialize() async {
     if (_initialized) {
-      return;
+      return _available;
     }
 
-    tz_data.initializeTimeZones();
+    try {
+      tz_data.initializeTimeZones();
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: androidSettings);
+      const androidSettings =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const settings = InitializationSettings(android: androidSettings);
 
-    await _plugin.initialize(settings);
-    _initialized = true;
+      await _plugin.initialize(settings);
+      _available = true;
+    } on MissingPluginException {
+      _available = false;
+    } on AssertionError {
+      _available = false;
+    } catch (_) {
+      _available = false;
+    } finally {
+      _initialized = true;
+    }
+
+    return _available;
   }
 
   Future<void> requestPermissions() async {
+    if (!await initialize()) {
+      return;
+    }
     await _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
@@ -77,7 +94,9 @@ class NotificationService {
     required String title,
     required DateTime dueDate,
   }) async {
-    await initialize();
+    if (!await initialize()) {
+      return;
+    }
 
     final reminderTime = _resolveReminderTime(dueDate);
     final zonedDateTime = tz.TZDateTime.from(reminderTime, tz.local);
@@ -99,12 +118,16 @@ class NotificationService {
   }
 
   Future<void> cancelTaskReminder(int taskId) async {
-    await initialize();
+    if (!await initialize()) {
+      return;
+    }
     await _plugin.cancel(_taskReminderId(taskId));
   }
 
   Future<void> cancelAllNotifications() async {
-    await initialize();
+    if (!await initialize()) {
+      return;
+    }
     await _plugin.cancelAll();
   }
 
@@ -113,7 +136,9 @@ class NotificationService {
     required String title,
     required String body,
   }) async {
-    await initialize();
+    if (!await initialize()) {
+      return;
+    }
     await _plugin.show(id, title, body, _notificationDetails);
   }
 

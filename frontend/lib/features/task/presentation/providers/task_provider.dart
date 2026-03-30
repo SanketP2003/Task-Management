@@ -12,10 +12,11 @@ import '../../domain/repositories/task_repository.dart';
 const _baseUrl = 'http://localhost:8000/api/v1';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  final authState = ref.watch(authProvider).valueOrNull;
+  // Ensure this provider re-evaluates with auth changes.
+  ref.watch(authProvider);
   return ApiClient(
     baseUrl: _baseUrl,
-    tokenProvider: () => authState?.accessToken,
+    tokenProvider: () => ref.read(authProvider).valueOrNull?.accessToken,
   );
 });
 
@@ -64,8 +65,8 @@ class CategoryNotifier extends AsyncNotifier<List<CategoryEntity>> {
 
   Future<void> refresh() async {
     if (state.hasValue) {
-      state =
-          AsyncValue<List<CategoryEntity>>.loading().copyWithPrevious(state);
+      state = const AsyncValue<List<CategoryEntity>>.loading()
+          .copyWithPrevious(state);
     } else {
       state = const AsyncValue.loading();
     }
@@ -105,7 +106,8 @@ class AllTasksNotifier extends AsyncNotifier<List<TaskEntity>> {
 
   Future<void> refresh() async {
     if (state.hasValue) {
-      state = AsyncValue<List<TaskEntity>>.loading().copyWithPrevious(state);
+      state =
+          const AsyncValue<List<TaskEntity>>.loading().copyWithPrevious(state);
     } else {
       state = const AsyncValue.loading();
     }
@@ -171,7 +173,8 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
 
   Future<void> refresh() async {
     if (state.hasValue) {
-      state = AsyncValue<List<TaskEntity>>.loading().copyWithPrevious(state);
+      state =
+          const AsyncValue<List<TaskEntity>>.loading().copyWithPrevious(state);
     } else {
       state = const AsyncValue.loading();
     }

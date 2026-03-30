@@ -31,24 +31,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       return;
     }
 
-    try {
-      await ref.read(authProvider.notifier).register(
-            name: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-          );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-      return;
-    }
+    await ref.read(authProvider.notifier).register(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
 
     if (!mounted) {
       return;
@@ -62,8 +49,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
-    } else {
-      Navigator.of(context).pop();
     }
   }
 

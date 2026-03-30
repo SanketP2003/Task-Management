@@ -28,23 +28,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    try {
-      await ref.read(authProvider.notifier).login(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-          );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-      return;
-    }
+    await ref.read(authProvider.notifier).login(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
 
     if (!mounted) {
       return;

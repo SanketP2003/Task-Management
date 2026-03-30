@@ -11,9 +11,10 @@ class NotificationSettingsNotifier extends AsyncNotifier<bool> {
   @override
   Future<bool> build() async {
     _prefs = await SharedPreferences.getInstance();
-    await NotificationService.instance.initialize();
+    final notificationsAvailable =
+        await NotificationService.instance.initialize();
     final enabled = _prefs.getBool(_notificationsEnabledKey) ?? true;
-    if (enabled) {
+    if (enabled && notificationsAvailable) {
       await NotificationService.instance.requestPermissions();
     }
     return enabled;
