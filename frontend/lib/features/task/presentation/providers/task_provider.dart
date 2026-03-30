@@ -58,9 +58,23 @@ final categoryProvider =
         CategoryNotifier.new);
 
 class CategoryNotifier extends AsyncNotifier<List<CategoryEntity>> {
+  Future<T> _withAuthGuard<T>(Future<T> Function() operation) async {
+    try {
+      return await operation();
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authProvider.notifier).logout();
+        throw Exception('Session expired. Please log in again.');
+      }
+      rethrow;
+    }
+  }
+
   @override
   Future<List<CategoryEntity>> build() async {
-    return ref.read(taskRepositoryProvider).fetchCategories();
+    return _withAuthGuard(
+      () => ref.read(taskRepositoryProvider).fetchCategories(),
+    );
   }
 
   Future<void> refresh() async {
@@ -72,8 +86,9 @@ class CategoryNotifier extends AsyncNotifier<List<CategoryEntity>> {
     }
 
     try {
-      final categories =
-          await ref.read(taskRepositoryProvider).fetchCategories();
+      final categories = await _withAuthGuard(
+        () => ref.read(taskRepositoryProvider).fetchCategories(),
+      );
       state = AsyncValue.data(categories);
     } catch (e, st) {
       if (state.hasValue) {
@@ -83,6 +98,26 @@ class CategoryNotifier extends AsyncNotifier<List<CategoryEntity>> {
         state = AsyncValue.error(e, st);
       }
     }
+  }
+
+  Future<CategoryEntity> createCategory(String name) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw Exception('Category name cannot be empty.');
+    }
+
+    final created = await _withAuthGuard(
+      () => ref.read(taskRepositoryProvider).createCategory(name: trimmedName),
+    );
+
+    final current = state.valueOrNull ?? <CategoryEntity>[];
+    final merged = [
+      ...current.where((category) => category.id != created.id),
+      created,
+    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    state = AsyncValue.data(merged);
+    return created;
   }
 }
 

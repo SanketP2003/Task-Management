@@ -125,6 +125,106 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     }
   }
 
+  Future<void> _addCategory() async {
+    final controller = TextEditingController();
+    bool isSaving = false;
+
+    Future<void> submitCategory(StateSetter setDialogState) async {
+      final name = controller.text.trim();
+      if (name.isEmpty) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Category name is required'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+        return;
+      }
+
+      if (isSaving) {
+        return;
+      }
+
+      setDialogState(() => isSaving = true);
+      try {
+        final category =
+            await ref.read(categoryProvider.notifier).createCategory(name);
+        if (!mounted) {
+          return;
+        }
+        Navigator.of(context).pop(category);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        setDialogState(() => isSaving = false);
+        final message = error.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+
+    final created = await showDialog<CategoryEntity>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (_, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Category'),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                enabled: !isSaving,
+                decoration: const InputDecoration(
+                  labelText: 'Category name',
+                  hintText: 'e.g. Work, Personal',
+                ),
+                onSubmitted: (_) => submitCategory(setDialogState),
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      isSaving ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed:
+                      isSaving ? null : () => submitCategory(setDialogState),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (!mounted || created == null) {
+      return;
+    }
+
+    ref.read(taskFormProvider(_draftKey).notifier).setCategoryId(created.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Category "${created.name}" added')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final formState = ref.watch(taskFormProvider(_draftKey));
@@ -286,9 +386,14 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int?>(
                     initialValue: selectedCategoryId,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Category',
                       hintText: 'Select category',
+                      suffixIcon: IconButton(
+                        tooltip: 'Add category',
+                        onPressed: isLoading ? null : _addCategory,
+                        icon: const Icon(Icons.add_circle_outline),
+                      ),
                     ),
                     items: [
                       const DropdownMenuItem<int?>(
