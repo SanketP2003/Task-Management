@@ -8,8 +8,16 @@ class TaskRepositoryImpl implements TaskRepository {
   final TaskRemoteDataSource _remoteDataSource;
 
   @override
-  Future<List<TaskEntity>> fetchTasks({TaskStatus? status, String? search}) {
-    return _remoteDataSource.fetchTasks(status: status, search: search);
+  Future<List<TaskEntity>> fetchTasks({
+    TaskStatus? status,
+    String? search,
+    int? categoryId,
+  }) {
+    return _remoteDataSource.fetchTasks(
+      status: status,
+      search: search,
+      categoryId: categoryId,
+    );
   }
 
   @override
@@ -19,6 +27,7 @@ class TaskRepositoryImpl implements TaskRepository {
     required DateTime dueDate,
     TaskStatus status = TaskStatus.todo,
     int? blockedBy,
+    int? categoryId,
   }) {
     return _remoteDataSource.createTask(
       title: title,
@@ -26,6 +35,7 @@ class TaskRepositoryImpl implements TaskRepository {
       dueDate: dueDate,
       status: status,
       blockedBy: blockedBy,
+      categoryId: categoryId,
     );
   }
 
@@ -38,6 +48,8 @@ class TaskRepositoryImpl implements TaskRepository {
     TaskStatus? status,
     int? blockedBy,
     bool setBlockedBy = false,
+    int? categoryId,
+    bool setCategoryId = false,
   }) {
     return _remoteDataSource.updateTask(
       id: id,
@@ -47,11 +59,68 @@ class TaskRepositoryImpl implements TaskRepository {
       status: status,
       blockedBy: blockedBy,
       includeBlockedBy: setBlockedBy,
+      categoryId: categoryId,
+      includeCategoryId: setCategoryId,
     );
   }
 
   @override
   Future<void> deleteTask(int id) {
     return _remoteDataSource.deleteTask(id);
+  }
+
+  @override
+  Future<TaskEntity> addSubtask({
+    required int taskId,
+    required String title,
+  }) {
+    return _remoteDataSource.addSubtask(taskId: taskId, title: title);
+  }
+
+  @override
+  Future<TaskEntity> updateSubtask({
+    required int taskId,
+    required int subtaskId,
+    String? title,
+    bool? isCompleted,
+  }) {
+    return _remoteDataSource.updateSubtask(
+      taskId: taskId,
+      subtaskId: subtaskId,
+      title: title,
+      isCompleted: isCompleted,
+    );
+  }
+
+  @override
+  Future<TaskEntity> deleteSubtask({
+    required int taskId,
+    required int subtaskId,
+  }) {
+    return _remoteDataSource.deleteSubtask(
+        taskId: taskId, subtaskId: subtaskId);
+  }
+
+  @override
+  Future<List<CategoryEntity>> fetchCategories() {
+    return _remoteDataSource.fetchCategories();
+  }
+
+  @override
+  Future<CategoryEntity> createCategory({required String name}) {
+    return _remoteDataSource.createCategory(name: name);
+  }
+
+  @override
+  Future<CategoryEntity> updateCategory({
+    required int categoryId,
+    required String name,
+  }) {
+    return _remoteDataSource.updateCategory(categoryId: categoryId, name: name);
+  }
+
+  @override
+  Future<void> deleteCategory(int categoryId) {
+    return _remoteDataSource.deleteCategory(categoryId);
   }
 }

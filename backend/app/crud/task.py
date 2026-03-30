@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.task import Task, TaskStatus
 
@@ -41,7 +41,11 @@ def create_task(db: Session, task_data: Any) -> Task | None:
 
 
 def get_tasks(db: Session, user_id: int, filters: Mapping[str, Any] | None = None) -> list[Task]:
-    query = db.query(Task).filter(Task.user_id == user_id)
+    query = (
+        db.query(Task)
+        .options(selectinload(Task.subtasks), selectinload(Task.category))
+        .filter(Task.user_id == user_id)
+    )
 
     if filters:
         status = filters.get("status")
@@ -54,11 +58,20 @@ def get_tasks(db: Session, user_id: int, filters: Mapping[str, Any] | None = Non
         if search:
             query = query.filter(Task.title.ilike(f"%{search}%"))
 
+        category_id = filters.get("category_id")
+        if category_id is not None:
+            query = query.filter(Task.category_id == int(category_id))
+
     return query.order_by(Task.created_at.desc()).all()
 
 
 def get_task(db: Session, task_id: int, user_id: int) -> Task | None:
-    return db.query(Task).filter(Task.id == task_id, Task.user_id == user_id).first()
+    return (
+        db.query(Task)
+        .options(selectinload(Task.subtasks), selectinload(Task.category))
+        .filter(Task.id == task_id, Task.user_id == user_id)
+        .first()
+    )
 
 
 def update_task(db: Session, task_id: int, user_id: int, data: Any) -> Task | None:

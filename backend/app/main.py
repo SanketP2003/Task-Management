@@ -5,6 +5,8 @@ from app.api.v1.router import api_router
 from app.db.base import Base
 from app.db.schema_patch import ensure_schema_compatibility
 from app.db.session import engine
+from app.models.category import Category
+from app.models.subtask import Subtask
 from app.models.task import Task
 from app.models.user import User
 

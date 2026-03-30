@@ -68,6 +68,7 @@ def ensure_schema_compatibility(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence task_recurrence_enum"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS notes TEXT"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS blocked_by INTEGER"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS category_id INTEGER"))
             conn.execute(
                 text(
                     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ "
@@ -82,6 +83,7 @@ def ensure_schema_compatibility(engine: Engine) -> None:
             )
 
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_user_id ON tasks (user_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tasks_category_id ON tasks (category_id)"))
 
             if inspector.has_table("users"):
                 conn.execute(
@@ -171,6 +173,8 @@ def ensure_schema_compatibility(engine: Engine) -> None:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN notes TEXT"))
             if "blocked_by" not in task_columns:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN blocked_by INTEGER"))
+            if "category_id" not in task_columns:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN category_id INTEGER"))
             if "created_at" not in task_columns:
                 conn.execute(text("ALTER TABLE tasks ADD COLUMN created_at DATETIME"))
             if "updated_at" not in task_columns:

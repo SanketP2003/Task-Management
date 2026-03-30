@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/notifications/notification_provider.dart';
+import '../../../../core/theme/theme_provider.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -9,7 +11,11 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(authProvider).valueOrNull;
+    final themeMode = ref.watch(themeProvider).valueOrNull ?? ThemeMode.light;
+    final notificationsEnabled =
+        ref.watch(notificationSettingsProvider).valueOrNull ?? true;
     final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = themeMode == ThemeMode.dark;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -19,8 +25,8 @@ class ProfileScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF2E6CF6), Color(0xFF5CC8A1)],
+              gradient: LinearGradient(
+                colors: [colorScheme.primary, colorScheme.secondary],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -67,19 +73,25 @@ class ProfileScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.palette_outlined),
-              title: const Text('Theme'),
-              subtitle: const Text('Coming soon'),
-              trailing: Icon(Icons.chevron_right, color: colorScheme.outline),
+            child: SwitchListTile.adaptive(
+              value: isDarkMode,
+              onChanged: (_) => ref.read(themeProvider.notifier).toggleTheme(),
+              secondary: const Icon(Icons.palette_outlined),
+              title: const Text('Dark Mode'),
+              subtitle: Text(isDarkMode ? 'Enabled' : 'Disabled'),
             ),
           ),
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.notifications_none),
+            child: SwitchListTile.adaptive(
+              value: notificationsEnabled,
+              onChanged: (value) => ref
+                  .read(notificationSettingsProvider.notifier)
+                  .setEnabled(value),
+              secondary: const Icon(Icons.notifications_none),
               title: const Text('Notifications'),
-              subtitle: const Text('Coming soon'),
-              trailing: Icon(Icons.chevron_right, color: colorScheme.outline),
+              subtitle: Text(
+                notificationsEnabled ? 'Enabled' : 'Disabled',
+              ),
             ),
           ),
           const SizedBox(height: 24),

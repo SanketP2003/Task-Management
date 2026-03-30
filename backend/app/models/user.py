@@ -20,3 +20,4 @@ class User(Base):
     )
 
     tasks = relationship("Task", back_populates="user", cascade="all, delete-orphan")
+    categories = relationship("Category", back_populates="user", cascade="all, delete-orphan")

@@ -4,6 +4,30 @@ enum TaskStatus {
   done,
 }
 
+class SubtaskEntity {
+  const SubtaskEntity({
+    required this.id,
+    required this.title,
+    required this.isCompleted,
+    required this.taskId,
+  });
+
+  final int id;
+  final String title;
+  final bool isCompleted;
+  final int taskId;
+}
+
+class CategoryEntity {
+  const CategoryEntity({
+    required this.id,
+    required this.name,
+  });
+
+  final int id;
+  final String name;
+}
+
 extension TaskStatusX on TaskStatus {
   String get apiValue {
     switch (this) {
@@ -40,6 +64,9 @@ class TaskEntity {
     required this.createdAt,
     required this.updatedAt,
     this.blockedBy,
+    this.categoryId,
+    this.category,
+    this.subtasks = const <SubtaskEntity>[],
   });
 
   final int id;
@@ -48,6 +75,9 @@ class TaskEntity {
   final DateTime dueDate;
   final TaskStatus status;
   final int? blockedBy;
+  final int? categoryId;
+  final CategoryEntity? category;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final List<SubtaskEntity> subtasks;
 }

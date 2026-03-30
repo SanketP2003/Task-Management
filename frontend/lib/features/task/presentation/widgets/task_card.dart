@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../../domain/entities/task_entity.dart';
 import '../providers/task_provider.dart';
 
-class TaskCard extends ConsumerWidget {
+class TaskCard extends ConsumerStatefulWidget {
   const TaskCard({
     super.key,
     required this.task,
@@ -17,18 +17,39 @@ class TaskCard extends ConsumerWidget {
   final String searchQuery;
   final VoidCallback? onTap;
 
+  @override
+  ConsumerState<TaskCard> createState() => _TaskCardState();
+}
+
+class _TaskCardState extends ConsumerState<TaskCard> {
+  late final TextEditingController _subtaskController;
+  bool _isExpanded = false;
+  bool _isSubmittingSubtask = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _subtaskController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _subtaskController.dispose();
+    super.dispose();
+  }
+
   bool _isBlocked(WidgetRef ref) {
-    if (task.blockedBy == null) return false;
+    if (widget.task.blockedBy == null) return false;
 
     final allTasks = ref.watch(allTasksProvider).valueOrNull ?? <TaskEntity>[];
     final blockingTask =
-        allTasks.where((t) => t.id == task.blockedBy).firstOrNull;
+        allTasks.where((t) => t.id == widget.task.blockedBy).firstOrNull;
 
     if (blockingTask != null) {
       return blockingTask.status != TaskStatus.done;
     }
 
-    return task.status != TaskStatus.done;
+    return widget.task.status != TaskStatus.done;
   }
 
   Widget _buildHighlightedText(
@@ -77,20 +98,25 @@ class TaskCard extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final dateText = DateFormat('MMM d, yyyy').format(task.dueDate);
+    final dateText = DateFormat('MMM d, yyyy').format(widget.task.dueDate);
 
-    final statusStyle = _statusStyle(task.status, colorScheme, theme);
+    final statusStyle = _statusStyle(widget.task.status, colorScheme, theme);
     final isBlocked = _isBlocked(ref);
-    final isOverdue =
-        task.status != TaskStatus.done && task.dueDate.isBefore(DateTime.now());
-    final leftAccent = switch (task.status) {
+    final isOverdue = widget.task.status != TaskStatus.done &&
+        widget.task.dueDate.isBefore(DateTime.now());
+    final leftAccent = switch (widget.task.status) {
       TaskStatus.todo => const Color(0xFFB0BEC5),
       TaskStatus.inProgress => const Color(0xFFF5B301),
       TaskStatus.done => const Color(0xFF18B28C),
     };
+
+    final subtasks = widget.task.subtasks;
+    final completedSubtasks =
+        subtasks.where((subtask) => subtask.isCompleted).length;
 
     return AbsorbPointer(
       absorbing: isBlocked,
@@ -106,7 +132,7 @@ class TaskCard extends ConsumerWidget {
               ? colorScheme.surfaceContainerHighest
               : colorScheme.surface,
           child: InkWell(
-            onTap: isBlocked ? null : onTap,
+            onTap: isBlocked ? null : widget.onTap,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
@@ -127,11 +153,11 @@ class TaskCard extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildHighlightedText(
-                                  task.title, searchQuery, context),
+                              _buildHighlightedText(widget.task.title,
+                                  widget.searchQuery, context),
                               const SizedBox(height: 6),
                               Text(
-                                task.description,
+                                widget.task.description,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -184,10 +210,219 @@ class TaskCard extends ConsumerWidget {
                         if (isBlocked)
                           _InfoChip(
                             icon: Icons.block,
-                            label: 'Blocked by #${task.blockedBy}',
+                            label: 'Blocked by #${widget.task.blockedBy}',
                             color: colorScheme.error,
                           ),
+                        if (widget.task.category != null)
+                          _InfoChip(
+                            icon: Icons.label_outline,
+                            label: widget.task.category!.name,
+                            color: colorScheme.tertiary,
+                          ),
+                        if (subtasks.isNotEmpty)
+                          _InfoChip(
+                            icon: Icons.playlist_add_check,
+                            label:
+                                '$completedSubtasks/${subtasks.length} subtasks',
+                            color: colorScheme.secondary,
+                          ),
                       ],
+                    ),
+                    const SizedBox(height: 10),
+                    Theme(
+                      data: theme.copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        maintainState: true,
+                        initiallyExpanded: _isExpanded,
+                        onExpansionChanged: (value) {
+                          setState(() => _isExpanded = value);
+                        },
+                        title: Text(
+                          'Subtasks',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        children: [
+                          if (subtasks.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'No subtasks yet',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                            ),
+                          for (final subtask in subtasks)
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: subtask.isCompleted,
+                                  onChanged: (value) async {
+                                    if (value == null) {
+                                      return;
+                                    }
+                                    try {
+                                      await ref
+                                          .read(taskProvider.notifier)
+                                          .toggleSubtask(
+                                            taskId: widget.task.id,
+                                            subtaskId: subtask.id,
+                                            isCompleted: value,
+                                          );
+                                    } catch (error) {
+                                      if (!context.mounted) {
+                                        return;
+                                      }
+                                      final messenger =
+                                          ScaffoldMessenger.of(context);
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                            content: Text(error.toString())),
+                                      );
+                                    }
+                                  },
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    subtask.title,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      decoration: subtask.isCompleted
+                                          ? TextDecoration.lineThrough
+                                          : TextDecoration.none,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.close_rounded),
+                                  onPressed: () async {
+                                    try {
+                                      await ref
+                                          .read(taskProvider.notifier)
+                                          .deleteSubtask(
+                                            taskId: widget.task.id,
+                                            subtaskId: subtask.id,
+                                          );
+                                    } catch (error) {
+                                      if (!context.mounted) {
+                                        return;
+                                      }
+                                      final messenger =
+                                          ScaffoldMessenger.of(context);
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                            content: Text(error.toString())),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _subtaskController,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) async {
+                                    if (_isSubmittingSubtask) {
+                                      return;
+                                    }
+                                    final value =
+                                        _subtaskController.text.trim();
+                                    if (value.isEmpty) {
+                                      return;
+                                    }
+                                    setState(() => _isSubmittingSubtask = true);
+                                    try {
+                                      await ref
+                                          .read(taskProvider.notifier)
+                                          .addSubtask(
+                                            taskId: widget.task.id,
+                                            title: value,
+                                          );
+                                      _subtaskController.clear();
+                                    } catch (error) {
+                                      if (!context.mounted) {
+                                        return;
+                                      }
+                                      final messenger =
+                                          ScaffoldMessenger.of(context);
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                            content: Text(error.toString())),
+                                      );
+                                    } finally {
+                                      if (mounted) {
+                                        setState(
+                                            () => _isSubmittingSubtask = false);
+                                      }
+                                    }
+                                  },
+                                  decoration: const InputDecoration(
+                                    hintText: 'Add subtask',
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton.filledTonal(
+                                onPressed: _isSubmittingSubtask
+                                    ? null
+                                    : () async {
+                                        final value =
+                                            _subtaskController.text.trim();
+                                        if (value.isEmpty) {
+                                          return;
+                                        }
+                                        setState(
+                                            () => _isSubmittingSubtask = true);
+                                        try {
+                                          await ref
+                                              .read(taskProvider.notifier)
+                                              .addSubtask(
+                                                taskId: widget.task.id,
+                                                title: value,
+                                              );
+                                          _subtaskController.clear();
+                                        } catch (error) {
+                                          if (!context.mounted) {
+                                            return;
+                                          }
+                                          final messenger =
+                                              ScaffoldMessenger.of(context);
+                                          messenger.showSnackBar(
+                                            SnackBar(
+                                                content:
+                                                    Text(error.toString())),
+                                          );
+                                        } finally {
+                                          if (mounted) {
+                                            setState(() =>
+                                                _isSubmittingSubtask = false);
+                                          }
+                                        }
+                                      },
+                                icon: _isSubmittingSubtask
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      )
+                                    : const Icon(Icons.add),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
                     ),
                   ],
                 ),

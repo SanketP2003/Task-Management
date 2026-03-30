@@ -131,7 +131,9 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     final isMutating = ref.watch(taskMutationLoadingProvider);
     final isLoading = formState.isLoading || isMutating;
     final tasksAsync = ref.watch(allTasksProvider);
+    final categoriesAsync = ref.watch(categoryProvider);
     final allTasks = tasksAsync.valueOrNull ?? <TaskEntity>[];
+    final allCategories = categoriesAsync.valueOrNull ?? <CategoryEntity>[];
 
     final candidateTasks = allTasks
         .where((task) => !_isEditMode || task.id != widget.task!.id)
@@ -142,8 +144,14 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     };
 
     final selectedBlockedBy = formState.blockedBy;
+    final selectedCategoryId = formState.categoryId;
     final hasMissingSelectedTask = selectedBlockedBy != null &&
         !taskTitlesById.containsKey(selectedBlockedBy);
+    final categoryNamesById = <int, String>{
+      for (final category in allCategories) category.id: category.name,
+    };
+    final hasMissingSelectedCategory = selectedCategoryId != null &&
+        !categoryNamesById.containsKey(selectedCategoryId);
 
     return Scaffold(
       appBar: AppBar(
@@ -273,6 +281,39 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                                   .read(taskFormProvider(_draftKey).notifier)
                                   .setStatus(value);
                             }
+                          },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int?>(
+                    initialValue: selectedCategoryId,
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      hintText: 'Select category',
+                    ),
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('None'),
+                      ),
+                      ...allCategories.map(
+                        (category) => DropdownMenuItem<int?>(
+                          value: category.id,
+                          child: Text(category.name),
+                        ),
+                      ),
+                      if (hasMissingSelectedCategory)
+                        DropdownMenuItem<int?>(
+                          value: selectedCategoryId,
+                          child: Text(
+                              'Category #$selectedCategoryId (unavailable)'),
+                        ),
+                    ],
+                    onChanged: isLoading
+                        ? null
+                        : (value) {
+                            ref
+                                .read(taskFormProvider(_draftKey).notifier)
+                                .setCategoryId(value);
                           },
                   ),
                   const SizedBox(height: 16),

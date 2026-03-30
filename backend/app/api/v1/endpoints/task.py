@@ -6,9 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db
+from app.crud import category as category_crud
+from app.crud import subtask as subtask_crud
 from app.crud import task as task_crud
 from app.models.task import TaskStatus
 from app.models.user import User
+from app.schemas.subtask import SubtaskCreate, SubtaskUpdate
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -62,6 +65,14 @@ async def create_task(
 ) -> TaskResponse:
     await asyncio.sleep(2)
 
+    if task_in.category_id is not None:
+        category = category_crud.get_category(db, category_id=task_in.category_id, user_id=current_user.id)
+        if category is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="category_id does not exist",
+            )
+
     _validate_blocked_by(db, current_user.id, task_id=None, blocked_by=task_in.blocked_by)
 
     created = task_crud.create_task(db, task_in.model_dump() | {"user_id": current_user.id})
@@ -78,6 +89,7 @@ async def create_task(
 async def list_tasks(
     status_filter: TaskStatus | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None, min_length=1),
+    category_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[TaskResponse]:
@@ -86,6 +98,8 @@ async def list_tasks(
         filters["status"] = status_filter
     if search:
         filters["search"] = search
+    if category_id is not None:
+        filters["category_id"] = category_id
 
     return task_crud.get_tasks(db, user_id=current_user.id, filters=filters)
 
@@ -116,6 +130,17 @@ async def update_task(
     await asyncio.sleep(2)
 
     incoming_data = task_in.model_dump(exclude_unset=True)
+    if "category_id" in incoming_data and incoming_data["category_id"] is not None:
+        category = category_crud.get_category(
+            db,
+            category_id=incoming_data["category_id"],
+            user_id=current_user.id,
+        )
+        if category is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="category_id does not exist",
+            )
     if "blocked_by" in incoming_data:
         _validate_blocked_by(
             db,
@@ -152,3 +177,82 @@ async def delete_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{task_id}/subtasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_subtask(
+    task_id: int,
+    subtask_in: SubtaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskResponse:
+    task = task_crud.get_task(db, task_id, current_user.id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    if not subtask_in.title.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Subtask title cannot be empty",
+        )
+
+    subtask_crud.create_subtask(db, task_id=task_id, title=subtask_in.title)
+    updated_task = task_crud.get_task(db, task_id, current_user.id)
+    if updated_task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    return updated_task
+
+
+@router.put("/{task_id}/subtasks/{subtask_id}", response_model=TaskResponse)
+async def update_subtask(
+    task_id: int,
+    subtask_id: int,
+    subtask_in: SubtaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskResponse:
+    task = task_crud.get_task(db, task_id, current_user.id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    payload = subtask_in.model_dump(exclude_unset=True)
+    if "title" in payload and not payload["title"].strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Subtask title cannot be empty",
+        )
+
+    updated = subtask_crud.update_subtask(
+        db,
+        subtask_id=subtask_id,
+        task_id=task_id,
+        data=payload,
+    )
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subtask not found")
+
+    updated_task = task_crud.get_task(db, task_id, current_user.id)
+    if updated_task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    return updated_task
+
+
+@router.delete("/{task_id}/subtasks/{subtask_id}", response_model=TaskResponse)
+async def delete_subtask(
+    task_id: int,
+    subtask_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskResponse:
+    task = task_crud.get_task(db, task_id, current_user.id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    deleted = subtask_crud.delete_subtask(db, subtask_id=subtask_id, task_id=task_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subtask not found")
+
+    updated_task = task_crud.get_task(db, task_id, current_user.id)
+    if updated_task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    return updated_task

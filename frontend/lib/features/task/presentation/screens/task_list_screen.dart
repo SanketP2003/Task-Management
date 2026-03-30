@@ -69,6 +69,11 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     ref.read(taskProvider.notifier).refresh();
   }
 
+  void _onCategoryChanged(int? value) {
+    ref.read(taskCategoryFilterProvider.notifier).state = value;
+    ref.read(taskProvider.notifier).refresh();
+  }
+
   void _cycleSortMessage(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Advanced sorting coming soon')),
@@ -86,6 +91,15 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
       case TaskStatus.done:
         return 'Done';
     }
+  }
+
+  String _categoryLabel(int? categoryId, List<CategoryEntity> categories) {
+    if (categoryId == null) {
+      return 'All categories';
+    }
+    final category =
+        categories.where((item) => item.id == categoryId).firstOrNull;
+    return category?.name ?? 'Category #$categoryId';
   }
 
   @override
@@ -126,9 +140,14 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     });
 
     final tasksAsync = ref.watch(taskProvider);
+    final categoriesAsync = ref.watch(categoryProvider);
+    final categories = categoriesAsync.valueOrNull ?? <CategoryEntity>[];
     final selectedStatus = ref.watch(taskStatusFilterProvider);
+    final selectedCategoryId = ref.watch(taskCategoryFilterProvider);
     final searchQuery = ref.watch(taskSearchQueryProvider);
-    final hasFilters = selectedStatus != null || searchQuery.trim().isNotEmpty;
+    final hasFilters = selectedStatus != null ||
+        selectedCategoryId != null ||
+        searchQuery.trim().isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -158,6 +177,27 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                           ),
                   ),
                   onChanged: _onSearchChanged,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  initialValue: selectedCategoryId,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    hintText: 'Filter by category',
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('All categories'),
+                    ),
+                    ...categories.map(
+                      (category) => DropdownMenuItem<int?>(
+                        value: category.id,
+                        child: Text(category.name),
+                      ),
+                    ),
+                  ],
+                  onChanged: _onCategoryChanged,
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -212,7 +252,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Showing: ${_statusLabel(selectedStatus)} ${searchQuery.trim().isEmpty ? '' : '• "$searchQuery"'}',
+                  'Showing: ${_statusLabel(selectedStatus)} • ${_categoryLabel(selectedCategoryId, categories)} ${searchQuery.trim().isEmpty ? '' : '• "$searchQuery"'}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
