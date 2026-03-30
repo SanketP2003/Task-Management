@@ -5,15 +5,21 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.core.dependencies import get_current_user, get_db
 from app.crud import task as task_crud
 from app.models.task import TaskStatus
+from app.models.user import User
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
-def _validate_blocked_by(db: Session, task_id: int | None, blocked_by: int | None) -> None:
+def _validate_blocked_by(
+    db: Session,
+    user_id: int,
+    task_id: int | None,
+    blocked_by: int | None,
+) -> None:
     if blocked_by is None:
         return
 
@@ -23,7 +29,7 @@ def _validate_blocked_by(db: Session, task_id: int | None, blocked_by: int | Non
             detail="blocked_by cannot reference the same task",
         )
 
-    blocked_task = task_crud.get_task(db, blocked_by)
+    blocked_task = task_crud.get_task(db, blocked_by, user_id)
     if blocked_task is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -42,19 +48,23 @@ def _validate_blocked_by(db: Session, task_id: int | None, blocked_by: int | Non
                 )
 
             visited.add(current_id)
-            current_task = task_crud.get_task(db, current_id)
+            current_task = task_crud.get_task(db, current_id, user_id)
             if current_task is None:
                 break
             current_id = current_task.blocked_by
 
 
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-async def create_task(task_in: TaskCreate, db: Session = Depends(get_db)) -> TaskResponse:
+async def create_task(
+    task_in: TaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskResponse:
     await asyncio.sleep(2)
 
-    _validate_blocked_by(db, task_id=None, blocked_by=task_in.blocked_by)
+    _validate_blocked_by(db, current_user.id, task_id=None, blocked_by=task_in.blocked_by)
 
-    created = task_crud.create_task(db, task_in)
+    created = task_crud.create_task(db, task_in.model_dump() | {"user_id": current_user.id})
     if created is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -69,6 +79,7 @@ async def list_tasks(
     status_filter: TaskStatus | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None, min_length=1),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[TaskResponse]:
     filters: dict[str, object] = {}
     if status_filter is not None:
@@ -76,20 +87,29 @@ async def list_tasks(
     if search:
         filters["search"] = search
 
-    return task_crud.get_tasks(db, filters=filters)
+    return task_crud.get_tasks(db, user_id=current_user.id, filters=filters)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
-async def get_task(task_id: int, db: Session = Depends(get_db)) -> TaskResponse:
-    task = task_crud.get_task(db, task_id)
+async def get_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskResponse:
+    task = task_crud.get_task(db, task_id, current_user.id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return task
 
 
 @router.put("/{task_id}", response_model=TaskResponse)
-async def update_task(task_id: int, task_in: TaskUpdate, db: Session = Depends(get_db)) -> TaskResponse:
-    existing_task = task_crud.get_task(db, task_id)
+async def update_task(
+    task_id: int,
+    task_in: TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskResponse:
+    existing_task = task_crud.get_task(db, task_id, current_user.id)
     if existing_task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
@@ -97,9 +117,14 @@ async def update_task(task_id: int, task_in: TaskUpdate, db: Session = Depends(g
 
     incoming_data = task_in.model_dump(exclude_unset=True)
     if "blocked_by" in incoming_data:
-        _validate_blocked_by(db, task_id=task_id, blocked_by=incoming_data["blocked_by"])
+        _validate_blocked_by(
+            db,
+            current_user.id,
+            task_id=task_id,
+            blocked_by=incoming_data["blocked_by"],
+        )
 
-    updated = task_crud.update_task(db, task_id, incoming_data)
+    updated = task_crud.update_task(db, task_id, current_user.id, incoming_data)
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return updated
@@ -110,9 +135,13 @@ async def update_task(task_id: int, task_in: TaskUpdate, db: Session = Depends(g
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
-async def delete_task(task_id: int, db: Session = Depends(get_db)) -> Response:
+async def delete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
     try:
-        deleted = task_crud.delete_task(db, task_id)
+        deleted = task_crud.delete_task(db, task_id, current_user.id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

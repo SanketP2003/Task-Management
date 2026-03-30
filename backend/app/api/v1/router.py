@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, task
+from app.api.v1.endpoints import auth, health, task
 
-# API v1 router groups all versioned endpoints.
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["Health"])
+api_router.include_router(auth.router)
 api_router.include_router(task.router)

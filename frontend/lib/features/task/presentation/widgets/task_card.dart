@@ -24,23 +24,23 @@ class TaskCard extends ConsumerWidget {
     final blockingTask =
         allTasks.where((t) => t.id == task.blockedBy).firstOrNull;
 
-    // Task is disabled ONLY if the blocked task is not "Done".
     if (blockingTask != null) {
       return blockingTask.status != TaskStatus.done;
     }
 
-    // Fallback if not found (maybe assume not blocked or still blocked depending on UX)
-    return task.status != TaskStatus.done; // Just keep old logic as fallback
+    return task.status != TaskStatus.done;
   }
 
   Widget _buildHighlightedText(
       String text, String query, BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        );
+
     if (query.trim().isEmpty) {
       return Text(
         text,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+        style: titleStyle,
       );
     }
 
@@ -48,9 +48,7 @@ class TaskCard extends ConsumerWidget {
     if (matchIndex == -1) {
       return Text(
         text,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+        style: titleStyle,
       );
     }
 
@@ -60,16 +58,16 @@ class TaskCard extends ConsumerWidget {
 
     return RichText(
       text: TextSpan(
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+        style: titleStyle,
         children: [
           TextSpan(text: beforeMatch),
           TextSpan(
             text: match,
-            style: const TextStyle(
-              backgroundColor: Colors.yellow,
-              color: Colors.black,
+            style: TextStyle(
+              backgroundColor:
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w800,
             ),
           ),
           TextSpan(text: afterMatch),
@@ -86,13 +84,20 @@ class TaskCard extends ConsumerWidget {
 
     final statusStyle = _statusStyle(task.status, colorScheme, theme);
     final isBlocked = _isBlocked(ref);
+    final isOverdue =
+        task.status != TaskStatus.done && task.dueDate.isBefore(DateTime.now());
+    final leftAccent = switch (task.status) {
+      TaskStatus.todo => const Color(0xFFB0BEC5),
+      TaskStatus.inProgress => const Color(0xFFF5B301),
+      TaskStatus.done => const Color(0xFF18B28C),
+    };
 
     return AbsorbPointer(
       absorbing: isBlocked,
       child: Opacity(
         opacity: isBlocked ? 0.5 : 1,
         child: Card(
-          elevation: 4,
+          elevation: 2,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -102,75 +107,90 @@ class TaskCard extends ConsumerWidget {
               : colorScheme.surface,
           child: InkWell(
             onTap: isBlocked ? null : onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildHighlightedText(
-                                task.title, searchQuery, context),
-                            const SizedBox(height: 6),
-                            Text(
-                              task.description,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.textTheme.bodyMedium?.color
-                                    ?.withValues(alpha: 0.8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _StatusBadge(style: statusStyle),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.event,
-                        size: 18,
-                        color: colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        dateText,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (isBlocked) ...[
-                    const SizedBox(height: 12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: leftAccent, width: 4),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.block,
-                          size: 18,
-                          color: colorScheme.error,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildHighlightedText(
+                                  task.title, searchQuery, context),
+                              const SizedBox(height: 6),
+                              Text(
+                                task.description,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withValues(alpha: 0.85),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          'Blocked by #${task.blockedBy}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.error,
-                            fontWeight: FontWeight.w600,
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (child, animation) {
+                            final scale = Tween<double>(begin: 0.92, end: 1)
+                                .animate(animation);
+                            return FadeTransition(
+                              opacity: animation,
+                              child:
+                                  ScaleTransition(scale: scale, child: child),
+                            );
+                          },
+                          child: _StatusBadge(
+                            key: ValueKey(statusStyle.label),
+                            style: statusStyle,
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _InfoChip(
+                          icon: Icons.event,
+                          label: dateText,
+                          color: isOverdue
+                              ? colorScheme.error
+                              : colorScheme.primary,
+                        ),
+                        if (isOverdue)
+                          _InfoChip(
+                            icon: Icons.warning_amber_rounded,
+                            label: 'Overdue',
+                            color: colorScheme.error,
+                          ),
+                        if (isBlocked)
+                          _InfoChip(
+                            icon: Icons.block,
+                            label: 'Blocked by #${task.blockedBy}',
+                            color: colorScheme.error,
+                          ),
+                      ],
+                    ),
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -204,8 +224,46 @@ class TaskCard extends ConsumerWidget {
   }
 }
 
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({
+    super.key,
     required this.style,
   });
 

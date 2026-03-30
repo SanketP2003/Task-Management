@@ -165,6 +165,11 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Text(
+                    'Basic Information',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 10),
                   TextFormField(
                     controller: _titleController,
                     enabled: !isLoading,
@@ -199,6 +204,12 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                         .read(taskFormProvider(_draftKey).notifier)
                         .setDescription(value),
                   ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Schedule',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 10),
                   const SizedBox(height: 16),
                   FormField<DateTime>(
                     validator: (_) {
@@ -228,6 +239,12 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  Text(
+                    'Status & Dependency',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   DropdownButtonFormField<TaskStatus>(
                     initialValue: formState.status,
                     decoration: const InputDecoration(
@@ -322,30 +339,33 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
                             color: Theme.of(context).colorScheme.error),
                       ),
                     ),
-                  SizedBox(
-                    height: 48,
-                    child: FilledButton(
-                      onPressed: isLoading ? null : _submit,
-                      child: isLoading
-                          ? const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                                SizedBox(width: 10),
-                                Text('Saving...'),
-                              ],
-                            )
-                          : Text(_isEditMode ? 'Update Task' : 'Create Task'),
-                    ),
-                  ),
+                  const SizedBox(height: 88),
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: SizedBox(
+          height: 48,
+          child: FilledButton(
+            onPressed: isLoading ? null : _submit,
+            child: isLoading
+                ? const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 10),
+                      Text('Saving...'),
+                    ],
+                  )
+                : Text(_isEditMode ? 'Save Changes' : 'Create Task'),
           ),
         ),
       ),

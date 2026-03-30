@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiException implements Exception {
@@ -32,26 +31,26 @@ class ApiClient {
   ApiClient({
     required this.baseUrl,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+    String? Function()? tokenProvider,
+  })  : _client = client ?? http.Client(),
+        _tokenProvider = tokenProvider;
 
   final String baseUrl;
   final http.Client _client;
+  final String? Function()? _tokenProvider;
   static const Duration _timeout = Duration(seconds: 15);
 
   Future<dynamic> _safeApiCall(Future<http.Response> Function() call) async {
     try {
       final response = await call().timeout(_timeout);
       return _parseResponse(response);
-    } on SocketException catch (e) {
-      debugPrint('Network Error: $e');
+    } on SocketException {
       throw NetworkException(
           'Network error: Please check your internet connection.');
-    } on TimeoutException catch (e) {
-      debugPrint('Timeout Error: $e');
+    } on TimeoutException {
       throw NetworkException('Request timed out. Please try again.');
     } catch (e) {
       if (e is ApiException || e is NetworkException) rethrow;
-      debugPrint('Unexpected Error: $e');
       throw NetworkException('Something went wrong. Please try again later.');
     }
   }
@@ -115,9 +114,11 @@ class ApiClient {
   }
 
   Map<String, String> _headers(Map<String, String>? headers) {
+    final token = _tokenProvider?.call();
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
       ...?headers,
     };
   }
@@ -162,8 +163,6 @@ class ApiClient {
               'Failed to load data (Status code: ${response.statusCode}).';
       }
     }
-
-    debugPrint('ApiException: [${response.statusCode}] $message');
 
     throw ApiException(
       statusCode: response.statusCode,

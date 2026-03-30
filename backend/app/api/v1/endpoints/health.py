@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-# Endpoint module for service health and readiness checks.
 router = APIRouter()
 
 

@@ -3,8 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.db.base import Base
+from app.db.schema_patch import ensure_schema_compatibility
 from app.db.session import engine
-from app.models.task import Task  # noqa: F401
+from app.models.task import Task
+from app.models.user import User
 
 app = FastAPI(title="Task Manager API", version="0.1.0")
 
@@ -26,11 +28,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register versioned API routes.
 app.include_router(api_router, prefix="/api/v1")
 
 
 @app.on_event("startup")
 def on_startup() -> None:
-    # Ensure metadata is imported and tables exist for local/dev environments.
     Base.metadata.create_all(bind=engine)
+    ensure_schema_compatibility(engine)

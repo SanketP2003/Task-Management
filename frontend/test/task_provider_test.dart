@@ -56,14 +56,9 @@ void main() {
         fireImmediately: true,
       );
 
-      // Verify initial loading state
       verify(() => listener(null, const AsyncLoading<List<TaskEntity>>()))
           .called(1);
-
-      // Wait for the provider to finish building
       await container.read(taskProvider.future);
-
-      // Verify the loaded data
       verify(() => listener(
             any(),
             any(that: isA<AsyncData<List<TaskEntity>>>()),
@@ -95,7 +90,6 @@ void main() {
     });
 
     test('createTask adds a new task to the list', () async {
-      // Setup initial data
       when(() => mockRepository.fetchTasks(status: null, search: null))
           .thenAnswer((_) async => []);
 
@@ -117,36 +111,26 @@ void main() {
             blockedBy: any(named: 'blockedBy'),
           )).thenAnswer((_) async => newTask);
 
-      await container.read(taskProvider.future); // wait for init
-
-      // Call create
+      await container.read(taskProvider.future);
       await container.read(taskProvider.notifier).createTask(
             title: 'New Task',
             description: 'Desc',
             dueDate: DateTime(2026, 1, 2),
           );
 
-      // Verify new task is in state
       final currentState = container.read(taskProvider);
       expect(currentState.value!.length, 1);
       expect(currentState.value!.first.title, 'New Task');
     });
 
     test('deleteTask removes the task from the list', () async {
-      // Setup initial data
       when(() => mockRepository.fetchTasks(status: null, search: null))
           .thenAnswer((_) async => [tTaskEntity]);
-      when(() => mockRepository.deleteTask(1)).thenAnswer((_) async => null);
+      when(() => mockRepository.deleteTask(1)).thenAnswer((_) async {});
 
-      await container.read(taskProvider.future); // wait for init
-
-      // Verify initial state
+      await container.read(taskProvider.future);
       expect(container.read(taskProvider).value!.length, 1);
-
-      // Call delete
       await container.read(taskProvider.notifier).deleteTask(1);
-
-      // Verify task is removed
       expect(container.read(taskProvider).value!.isEmpty, true);
     });
   });

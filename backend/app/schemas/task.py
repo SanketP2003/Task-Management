@@ -1,8 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.task import TaskStatus
+from app.models.task import TaskPriority, TaskRecurrence, TaskStatus
 
 
 class TaskBase(BaseModel):
@@ -10,6 +10,11 @@ class TaskBase(BaseModel):
     description: str
     due_date: datetime
     status: TaskStatus = TaskStatus.TODO
+    priority: TaskPriority = TaskPriority.MEDIUM
+    tags: list[str] = Field(default_factory=list)
+    reminder_at: datetime | None = None
+    recurrence: TaskRecurrence = TaskRecurrence.NONE
+    notes: str | None = None
     blocked_by: int | None = None
 
 

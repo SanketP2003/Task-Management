@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/datasources/task_remote_datasource.dart';
 import '../../data/repositories/task_repository_impl.dart';
 import '../../domain/entities/task_entity.dart';
@@ -9,7 +10,11 @@ import '../../domain/repositories/task_repository.dart';
 const _baseUrl = 'http://localhost:8000/api/v1';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(baseUrl: _baseUrl);
+  final authState = ref.watch(authProvider).valueOrNull;
+  return ApiClient(
+    baseUrl: _baseUrl,
+    tokenProvider: () => authState?.accessToken,
+  );
 });
 
 final taskRemoteDataSourceProvider = Provider<TaskRemoteDataSource>((ref) {
@@ -42,9 +47,21 @@ final allTasksProvider =
         AllTasksNotifier.new);
 
 class AllTasksNotifier extends AsyncNotifier<List<TaskEntity>> {
+  Future<T> _withAuthGuard<T>(Future<T> Function() operation) async {
+    try {
+      return await operation();
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authProvider.notifier).logout();
+        throw Exception('Session expired. Please log in again.');
+      }
+      rethrow;
+    }
+  }
+
   @override
   Future<List<TaskEntity>> build() async {
-    return ref.read(taskRepositoryProvider).fetchTasks();
+    return _withAuthGuard(() => ref.read(taskRepositoryProvider).fetchTasks());
   }
 
   Future<void> refresh() async {
@@ -55,7 +72,9 @@ class AllTasksNotifier extends AsyncNotifier<List<TaskEntity>> {
     }
 
     try {
-      final data = await ref.read(taskRepositoryProvider).fetchTasks();
+      final data = await _withAuthGuard(
+        () => ref.read(taskRepositoryProvider).fetchTasks(),
+      );
       state = AsyncValue.data(data);
     } catch (e, st) {
       if (state.hasValue) {
@@ -69,7 +88,19 @@ class AllTasksNotifier extends AsyncNotifier<List<TaskEntity>> {
 }
 
 class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
-  late final TaskRepository _repository;
+  TaskRepository get _repository => ref.read(taskRepositoryProvider);
+
+  Future<T> _withAuthGuard<T>(Future<T> Function() operation) async {
+    try {
+      return await operation();
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authProvider.notifier).logout();
+        throw Exception('Session expired. Please log in again.');
+      }
+      rethrow;
+    }
+  }
 
   String get _searchQuery {
     final value = ref.read(taskSearchQueryProvider).trim();
@@ -80,15 +111,15 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
 
   @override
   Future<List<TaskEntity>> build() async {
-    _repository = ref.read(taskRepositoryProvider);
-    return _repository.fetchTasks(
-      status: _selectedStatus,
-      search: _searchQuery.isEmpty ? null : _searchQuery,
+    return _withAuthGuard(
+      () => _repository.fetchTasks(
+        status: _selectedStatus,
+        search: _searchQuery.isEmpty ? null : _searchQuery,
+      ),
     );
   }
 
   Future<void> refresh() async {
-    // Preserve current data while loading so the UI doesn't flicker
     if (state.hasValue) {
       state = AsyncValue<List<TaskEntity>>.loading().copyWithPrevious(state);
     } else {
@@ -96,9 +127,11 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
     }
 
     try {
-      final data = await _repository.fetchTasks(
-        status: _selectedStatus,
-        search: _searchQuery.isEmpty ? null : _searchQuery,
+      final data = await _withAuthGuard(
+        () => _repository.fetchTasks(
+          status: _selectedStatus,
+          search: _searchQuery.isEmpty ? null : _searchQuery,
+        ),
       );
       state = AsyncValue.data(data);
     } catch (e, st) {
@@ -127,17 +160,18 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
     final previous = state.valueOrNull ?? <TaskEntity>[];
 
     try {
-      final created = await _repository.createTask(
-        title: title,
-        description: description,
-        dueDate: dueDate,
-        status: status,
-        blockedBy: blockedBy,
+      final created = await _withAuthGuard(
+        () => _repository.createTask(
+          title: title,
+          description: description,
+          dueDate: dueDate,
+          status: status,
+          blockedBy: blockedBy,
+        ),
       );
 
       state = AsyncValue.data([created, ...previous]);
-    } catch (error, stackTrace) {
-      // Revert to previous data on error to prevent erasing the list
+    } catch (error) {
       state = AsyncValue.data(previous);
       rethrow;
     } finally {
@@ -163,14 +197,16 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
     final previous = state.valueOrNull ?? <TaskEntity>[];
 
     try {
-      final updated = await _repository.updateTask(
-        id: id,
-        title: title,
-        description: description,
-        dueDate: dueDate,
-        status: status,
-        blockedBy: blockedBy,
-        setBlockedBy: setBlockedBy,
+      final updated = await _withAuthGuard(
+        () => _repository.updateTask(
+          id: id,
+          title: title,
+          description: description,
+          dueDate: dueDate,
+          status: status,
+          blockedBy: blockedBy,
+          setBlockedBy: setBlockedBy,
+        ),
       );
 
       state = AsyncValue.data(
@@ -178,7 +214,7 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
             .map((task) => task.id == id ? updated : task)
             .toList(growable: false),
       );
-    } catch (error, stackTrace) {
+    } catch (error) {
       state = AsyncValue.data(previous);
       rethrow;
     } finally {
@@ -188,18 +224,13 @@ class TaskNotifier extends AsyncNotifier<List<TaskEntity>> {
 
   Future<void> deleteTask(int id) async {
     final previous = state.valueOrNull ?? <TaskEntity>[];
-    // Optimistically remove from UI, or just show loading, but do not destroy the list
-    // state = const AsyncValue.loading(); it replaces the whole list with a spinner!
-    // Instead we can keep the data.
 
     try {
-      await _repository.deleteTask(id);
+      await _withAuthGuard(() => _repository.deleteTask(id));
       ref.invalidate(allTasksProvider);
       state = AsyncValue.data(
           previous.where((task) => task.id != id).toList(growable: false));
-    } catch (error, stackTrace) {
-      // Don't replace state with error, just retain previous list and rethrow
-      // so the UI can show a Snackbar
+    } catch (error) {
       state = AsyncValue.data(previous);
       rethrow;
     }
@@ -404,7 +435,6 @@ class TaskFormNotifier extends FamilyNotifier<TaskFormState, String> {
       ref.invalidate(taskProvider);
       ref.invalidate(allTasksProvider);
 
-      // Clear draft on successful submission to prevent draft from reappearing when creating a new task next time
       ref.invalidateSelf();
 
       return true;

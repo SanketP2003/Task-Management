@@ -23,6 +23,7 @@ def create_task(db: Session, task_data: Any) -> Task | None:
     duplicate = (
         db.query(Task)
         .filter(
+            Task.user_id == payload["user_id"],
             func.lower(Task.title) == payload["title"].strip().lower(),
             Task.description == payload["description"],
             Task.due_date == payload["due_date"],
@@ -39,8 +40,8 @@ def create_task(db: Session, task_data: Any) -> Task | None:
     return task
 
 
-def get_tasks(db: Session, filters: Mapping[str, Any] | None = None) -> list[Task]:
-    query = db.query(Task)
+def get_tasks(db: Session, user_id: int, filters: Mapping[str, Any] | None = None) -> list[Task]:
+    query = db.query(Task).filter(Task.user_id == user_id)
 
     if filters:
         status = filters.get("status")
@@ -56,12 +57,12 @@ def get_tasks(db: Session, filters: Mapping[str, Any] | None = None) -> list[Tas
     return query.order_by(Task.created_at.desc()).all()
 
 
-def get_task(db: Session, task_id: int) -> Task | None:
-    return db.query(Task).filter(Task.id == task_id).first()
+def get_task(db: Session, task_id: int, user_id: int) -> Task | None:
+    return db.query(Task).filter(Task.id == task_id, Task.user_id == user_id).first()
 
 
-def update_task(db: Session, task_id: int, data: Any) -> Task | None:
-    task = get_task(db, task_id)
+def update_task(db: Session, task_id: int, user_id: int, data: Any) -> Task | None:
+    task = get_task(db, task_id, user_id)
     if not task:
         return None
 
@@ -74,12 +75,17 @@ def update_task(db: Session, task_id: int, data: Any) -> Task | None:
     return task
 
 
-def delete_task(db: Session, task_id: int) -> bool:
-    task = get_task(db, task_id)
+def delete_task(db: Session, task_id: int, user_id: int) -> bool:
+    task = get_task(db, task_id, user_id)
     if not task:
         return False
 
-    has_dependents = db.query(Task.id).filter(Task.blocked_by == task_id).first() is not None
+    has_dependents = (
+        db.query(Task.id)
+        .filter(Task.blocked_by == task_id, Task.user_id == user_id)
+        .first()
+        is not None
+    )
     if has_dependents:
         raise ValueError("Task has dependent tasks")
 
